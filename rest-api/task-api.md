@@ -106,7 +106,7 @@ Request body:
   "description": "Review and merge the new feature branch",
   "project_id": "prj_xyz789",
   "assigned_to": "usr_654321",
-  "priority": "medium",
+  "prioritty": "medium",
   "due_date": "2024-06-28"
 }
 ```
@@ -267,22 +267,6 @@ Request body:
 - `task.deleted` - Task deleted
 - `comment.added` - Comment added to task
 
-Example webhook payload:
-```json
-{
-  "event": "task.completed",
-  "timestamp": "2024-06-26T16:00:00Z",
-  "data": {
-    "task": {
-      "id": "tsk_abc123",
-      "title": "Update API documentation",
-      "completed_by": "usr_123456",
-      "completed_at": "2024-06-26T16:00:00Z"
-    }
-  }
-}
-```
-
 ## Error Handling
 
 The API uses standard HTTP status codes and returns errors in a consistent format.
@@ -427,4 +411,4 @@ Official SDKs:
 
 ---
 
-*API Version: 1.0 | Last updated: January 2025*
+*API Version: 1.0 | Last updated: November 2024*
