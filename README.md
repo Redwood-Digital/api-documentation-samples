@@ -26,7 +26,7 @@ These samples demonstrate:
 
 ## Usage
 
-Feel free to use these as templates or reference for your own API documentation needs. Each example follows industry best practices for technical documentation.
+These can be used as templates for API documentation.
 
 ## Author
 
@@ -35,4 +35,4 @@ Jacob Elder - Technical Documentation Specialist
 
 ---
 
-Looking for professional API documentation? Contact me through [GitHub](https://github.com/RedwoodDigitalLLC) or visit my portfolio.
+[GitHub](https://github.com/RedwoodDigitalLLC) | [Portfolio](https://cherami.link)
