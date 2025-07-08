@@ -1,27 +1,352 @@
 openapi: 3.0.3
 info:
   title: Bookstore API
-  description: RESTful API for managing an online bookstore
+  description: |
+    E-commerce API for an online bookstore with advanced features.
+    
+    ## Features
+    - Book catalog with search and filtering
+    - Shopping cart management  
+    - Order processing with payment integration
+    - User reviews and ratings
+    - Inventory tracking
+    - Wishlist functionality
+    
+    ## Authentication
+    
+    This API uses OAuth 2.0 for authentication. Obtain an access token using the authorization code flow.
+    
   version: 2.0.0
+  termsOfService: https://bookstore.example.com/terms
   contact:
     name: Bookstore API Team
-    email: api@bookstore.com
+    email: api@bookstore.example.com
+    url: https://bookstore.example.com/support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
 servers:
-  - url: https://api.bookstore.com/v2
-    description: Production
-  - url: https://sandbox.api.bookstore.com/v2
-    description: Sandbox
-security:
-  - BearerAuth: []
+  - url: https://api.bookstore.example.com/v2
+    description: Production server
+  - url: https://sandbox-api.bookstore.example.com/v2
+    description: Sandbox server
+
+tags:
+  - name: books
+    description: Book catalog operations
+  - name: cart
+    description: Shopping cart management
+  - name: orders
+    description: Order processing
+  - name: reviews
+    description: Book reviews and ratings
+  - name: users
+    description: User account management
+  - name: wishlist
+    description: User wishlist operations
+
 paths:
   /books:
     get:
-      summary: List books
-      description: Get a paginated list of books with optional filters
-      operationId: listBooks
       tags:
-        - Books
+        - books
+      summary: Search and browse books
+      description: Returns a paginated list of books with advanced filtering options
+      operationId: searchBooks
       parameters:
+        - name: q
+          in: query
+          description: Search query (searches in title, author, ISBN)
+          schema:
+            type: string
+          example: "Harry Potter"
+        - name: author
+          in: query
+          description: Filter by author name
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [fiction, non-fiction, science, technology, history, biography, children, romance, mystery, fantasy]
+          style: form
+          explode: true
+        - name: priceMin
+          in: query
+          description: Minimum price filter
+          schema:
+            type: number
+            format: float
+            minimum: 0
+        - name: priceMax
+          in: query
+          description: Maximum price filter
+          schema:
+            type: number
+            format: float
+            minimum: 0
+        - name: inStock
+          in: query
+          description: Filter only books in stock
+          schema:
+            type: boolean
+            default: false
+        - name: sortBy
+          in: query
+          description: Sort results by field
+          schema:
+            type: string
+            enum: [relevance, title, price_asc, price_desc, rating, newest, bestselling]
+            default: relevance
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BookSummary'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  facets:
+                    $ref: '#/components/schemas/SearchFacets'
+              example:
+                data:
+                  - id: "978-0-7475-3269-9"
+                    title: "Harry Potter and the Philosopher's Stone"
+                    author: "J.K. Rowling"
+                    price: 12.99
+                    currency: "USD"
+                    coverImage: "https://example.com/covers/hp1.jpg"
+                    rating: 4.8
+                    reviewCount: 15420
+                    inStock: true
+                pagination:
+                  page: 1
+                  limit: 20
+                  total: 245
+                  totalPages: 13
+                facets:
+                  categories:
+                    - name: "Fantasy"
+                      count: 89
+                    - name: "Fiction"
+                      count: 156
+                  priceRanges:
+                    - range: "0-10"
+                      count: 45
+                    - range: "10-20"
+                      count: 120
+                    - range: "20+"
+                      count: 80
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /books/{isbn}:
+    get:
+      tags:
+        - books
+      summary: Get book details
+      description: Returns detailed information about a specific book
+      operationId: getBookByISBN
+      parameters:
+        - name: isbn
+          in: path
+          description: ISBN-13 of the book
+          required: true
+          schema:
+            type: string
+            pattern: '^978-[0-9]{1}-[0-9]{4}-[0-9]{4}-[0-9]{1}$'
+          example: "978-0-7475-3269-9"
+      responses:
+        '200':
+          description: Book details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cart:
+    get:
+      tags:
+        - cart
+      summary: Get current cart
+      description: Returns the current user's shopping cart
+      operationId: getCart
+      responses:
+        '200':
+          description: Shopping cart contents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      security:
+        - oauth2: [read]
+
+    post:
+      tags:
+        - cart
+      summary: Add item to cart
+      description: Adds a book to the shopping cart
+      operationId: addToCart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - isbn
+                - quantity
+              properties:
+                isbn:
+                  type: string
+                  description: ISBN of the book to add
+                quantity:
+                  type: integer
+                  minimum: 1
+                  default: 1
+            example:
+              isbn: "978-0-7475-3269-9"
+              quantity: 2
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - oauth2: [write]
+
+  /cart/items/{itemId}:
+    patch:
+      tags:
+        - cart
+      summary: Update cart item quantity
+      description: Updates the quantity of an item in the cart
+      operationId: updateCartItem
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - quantity
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 0
+                  description: New quantity (0 to remove)
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - oauth2: [write]
+
+    delete:
+      tags:
+        - cart
+      summary: Remove item from cart
+      description: Removes an item from the shopping cart
+      operationId: removeFromCart
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Item removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - oauth2: [write]
+
+  /orders:
+    get:
+      tags:
+        - orders
+      summary: List user orders
+      description: Returns a list of orders for the authenticated user
+      operationId: listOrders
+      parameters:
+        - name: status
+          in: query
+          description: Filter by order status
+          schema:
+            type: string
+            enum: [pending, processing, shipped, delivered, cancelled]
         - name: page
           in: query
           schema:
@@ -32,91 +357,128 @@ paths:
           in: query
           schema:
             type: integer
-            minimum: 1
-            maximum: 100
+            minimum: 10
+            maximum: 50
             default: 20
-        - name: genre
-          in: query
-          schema:
-            type: string
-            enum: [fiction, non-fiction, science, technology, business, biography]
-        - name: author
-          in: query
-          schema:
-            type: string
-        - name: search
-          in: query
-          description: Search in title, author, or ISBN
-          schema:
-            type: string
       responses:
         '200':
-          description: Successful response
+          description: Order list
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  books:
+                  data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Book'
+                      $ref: '#/components/schemas/OrderSummary'
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-  /books/{bookId}:
-    get:
-      summary: Get book details
-      operationId: getBook
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      security:
+        - oauth2: [read]
+
+    post:
       tags:
-        - Books
-      parameters:
-        - $ref: '#/components/parameters/BookId'
+        - orders
+      summary: Create order from cart
+      description: Creates a new order from the current cart contents
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
       responses:
-        '200':
-          description: Book found
+        '201':
+          description: Order created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookDetail'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /books/{bookId}/reviews:
+                $ref: '#/components/schemas/Order'
+          headers:
+            Location:
+              description: URL of the created order
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Cart is empty or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+      security:
+        - oauth2: [write]
+
+  /books/{isbn}/reviews:
     get:
-      summary: Get book reviews
-      description: Get reviews for a specific book
-      operationId: getBookReviews
       tags:
-        - Reviews
+        - reviews
+      summary: Get book reviews
+      description: Returns reviews for a specific book
+      operationId: getBookReviews
       parameters:
-        - $ref: '#/components/parameters/BookId'
+        - name: isbn
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [newest, oldest, rating_high, rating_low, helpful]
+            default: helpful
         - name: page
           in: query
           schema:
             type: integer
+            minimum: 1
             default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 50
+            default: 20
       responses:
         '200':
-          description: Reviews retrieved
+          description: Review list
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  reviews:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Review'
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
+                    $ref: '#/components/schemas/PaginationMeta'
+                  summary:
+                    $ref: '#/components/schemas/ReviewSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
     post:
-      summary: Add book review
-      operationId: addBookReview
       tags:
-        - Reviews
+        - reviews
+      summary: Create a review
+      description: Creates a new review for a book
+      operationId: createReview
       parameters:
-        - $ref: '#/components/parameters/BookId'
+        - name: isbn
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -125,7 +487,8 @@ paths:
               type: object
               required:
                 - rating
-                - comment
+                - title
+                - content
               properties:
                 rating:
                   type: integer
@@ -134,9 +497,13 @@ paths:
                 title:
                   type: string
                   maxLength: 100
-                comment:
+                content:
                   type: string
-                  maxLength: 1000
+                  minLength: 50
+                  maxLength: 5000
+                verified_purchase:
+                  type: boolean
+                  readOnly: true
       responses:
         '201':
           description: Review created
@@ -148,166 +515,33 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-  /cart:
-    get:
-      summary: Get cart contents
-      operationId: getCart
-      tags:
-        - Cart
-      responses:
-        '200':
-          description: Cart retrieved
+        '409':
+          description: User already reviewed this book
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Cart'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /cart/items:
-    post:
-      summary: Add item to cart
-      operationId: addToCart
-      tags:
-        - Cart
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - bookId
-                - quantity
-              properties:
-                bookId:
-                  type: string
-                quantity:
-                  type: integer
-                  minimum: 1
-      responses:
-        '201':
-          description: Item added to cart
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CartItem'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-  /orders:
-    get:
-      summary: List orders
-      operationId: listOrders
-      tags:
-        - Orders
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [pending, processing, shipped, delivered, cancelled]
-      responses:
-        '200':
-          description: Orders retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  orders:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Order'
-                  pagination:
-                    $ref: '#/components/schemas/Pagination'
-    post:
-      summary: Create order
-      operationId: createOrder
-      tags:
-        - Orders
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - shippingAddress
-                - paymentMethod
-              properties:
-                shippingAddress:
-                  $ref: '#/components/schemas/Address'
-                paymentMethod:
-                  type: string
-                  enum: [credit_card, paypal, bank_transfer]
-      responses:
-        '201':
-          description: Order created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Order'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-  /auth/login:
-    post:
-      summary: Login
-      description: Authenticate and receive access token
-      operationId: login
-      tags:
-        - Authentication
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user:
-                    $ref: '#/components/schemas/User'
-                  token:
-                    type: string
-        '401':
-          description: Invalid credentials
+                $ref: '#/components/schemas/Error'
+      security:
+        - oauth2: [write]
+
 components:
   schemas:
-    Book:
+    BookSummary:
       type: object
       properties:
         id:
           type: string
+          description: ISBN-13
         title:
           type: string
         author:
           type: string
-        isbn:
-          type: string
         price:
           type: number
-          format: double
-        genre:
+          format: float
+        currency:
           type: string
+          enum: [USD, EUR, GBP]
         coverImage:
           type: string
           format: uri
@@ -316,11 +550,14 @@ components:
           format: float
           minimum: 0
           maximum: 5
+        reviewCount:
+          type: integer
         inStock:
           type: boolean
+
     BookDetail:
       allOf:
-        - $ref: '#/components/schemas/Book'
+        - $ref: '#/components/schemas/BookSummary'
         - type: object
           properties:
             description:
@@ -334,55 +571,144 @@ components:
               type: integer
             language:
               type: string
-    Review:
-      type: object
-      properties:
-        id:
-          type: string
-        userId:
-          type: string
-        userName:
-          type: string
-        rating:
-          type: integer
-          minimum: 1
-          maximum: 5
-        title:
-          type: string
-        comment:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
+            categories:
+              type: array
+              items:
+                type: string
+            dimensions:
+              type: object
+              properties:
+                height:
+                  type: number
+                width:
+                  type: number
+                thickness:
+                  type: number
+                unit:
+                  type: string
+                  enum: [cm, in]
+            weight:
+              type: object
+              properties:
+                value:
+                  type: number
+                unit:
+                  type: string
+                  enum: [g, oz]
+            stock:
+              type: object
+              properties:
+                available:
+                  type: integer
+                warehouse:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      location:
+                        type: string
+                      quantity:
+                        type: integer
+
     Cart:
       type: object
       properties:
         id:
           type: string
+          format: uuid
         items:
           type: array
           items:
             $ref: '#/components/schemas/CartItem'
+        subtotal:
+          type: number
+          format: float
+        tax:
+          type: number
+          format: float
+        shipping:
+          type: number
+          format: float
         total:
           type: number
-          format: double
+          format: float
+        currency:
+          type: string
+          enum: [USD, EUR, GBP]
+        itemCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     CartItem:
       type: object
       properties:
         id:
           type: string
+          format: uuid
         book:
-          $ref: '#/components/schemas/Book'
+          $ref: '#/components/schemas/BookSummary'
         quantity:
           type: integer
+          minimum: 1
         price:
           type: number
-          format: double
+          format: float
+        subtotal:
+          type: number
+          format: float
+
     Order:
       type: object
       properties:
         id:
           type: string
+          format: uuid
+        orderNumber:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, shipped, delivered, cancelled]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        shipping:
+          $ref: '#/components/schemas/ShippingDetails'
+        billing:
+          $ref: '#/components/schemas/BillingDetails'
+        payment:
+          $ref: '#/components/schemas/PaymentDetails'
+        totals:
+          type: object
+          properties:
+            subtotal:
+              type: number
+            tax:
+              type: number
+            shipping:
+              type: number
+            total:
+              type: number
+            currency:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
         orderNumber:
           type: string
         status:
@@ -390,44 +716,264 @@ components:
           enum: [pending, processing, shipped, delivered, cancelled]
         total:
           type: number
-          format: double
+        currency:
+          type: string
+        itemCount:
+          type: integer
         createdAt:
           type: string
           format: date-time
-    User:
+
+    OrderItem:
       type: object
       properties:
         id:
           type: string
-        email:
+          format: uuid
+        isbn:
           type: string
-          format: email
+        title:
+          type: string
+        author:
+          type: string
+        price:
+          type: number
+        quantity:
+          type: integer
+        subtotal:
+          type: number
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - shipping
+        - billing
+        - payment
+      properties:
+        shipping:
+          $ref: '#/components/schemas/ShippingDetails'
+        billing:
+          $ref: '#/components/schemas/BillingDetails'
+        payment:
+          $ref: '#/components/schemas/PaymentMethod'
+        giftMessage:
+          type: string
+          maxLength: 500
+        promoCode:
+          type: string
+
+    ShippingDetails:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - address1
+        - city
+        - state
+        - postalCode
+        - country
+      properties:
         firstName:
           type: string
         lastName:
           type: string
-    Address:
-      type: object
-      required:
-        - street
-        - city
-        - state
-        - zipCode
-        - country
-      properties:
-        street:
+        company:
           type: string
-        street2:
+        address1:
+          type: string
+        address2:
           type: string
         city:
           type: string
         state:
           type: string
-        zipCode:
+        postalCode:
           type: string
         country:
           type: string
-    Pagination:
+        phone:
+          type: string
+        instructions:
+          type: string
+
+    BillingDetails:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - address1
+        - city
+        - state
+        - postalCode
+        - country
+      properties:
+        sameAsShipping:
+          type: boolean
+          default: true
+        firstName:
+          type: string
+        lastName:
+          type: string
+        company:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+
+    PaymentMethod:
+      type: object
+      required:
+        - type
+      discriminator:
+        propertyName: type
+      properties:
+        type:
+          type: string
+          enum: [credit_card, paypal, apple_pay, google_pay]
+      oneOf:
+        - $ref: '#/components/schemas/CreditCardPayment'
+        - $ref: '#/components/schemas/PayPalPayment'
+        - $ref: '#/components/schemas/DigitalWalletPayment'
+
+    CreditCardPayment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentMethod'
+        - type: object
+          required:
+            - cardNumber
+            - expiryMonth
+            - expiryYear
+            - cvv
+            - cardholderName
+          properties:
+            cardNumber:
+              type: string
+              pattern: '^[0-9]{13,19}$'
+            expiryMonth:
+              type: integer
+              minimum: 1
+              maximum: 12
+            expiryYear:
+              type: integer
+            cvv:
+              type: string
+              pattern: '^[0-9]{3,4}$'
+            cardholderName:
+              type: string
+
+    PayPalPayment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentMethod'
+        - type: object
+          required:
+            - returnUrl
+            - cancelUrl
+          properties:
+            returnUrl:
+              type: string
+              format: uri
+            cancelUrl:
+              type: string
+              format: uri
+
+    DigitalWalletPayment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentMethod'
+        - type: object
+          required:
+            - token
+          properties:
+            token:
+              type: string
+              description: Payment token from wallet provider
+
+    PaymentDetails:
+      type: object
+      properties:
+        method:
+          type: string
+        status:
+          type: string
+          enum: [pending, authorized, captured, failed, refunded]
+        transactionId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        processedAt:
+          type: string
+          format: date-time
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        title:
+          type: string
+        content:
+          type: string
+        author:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            verified_purchase:
+              type: boolean
+        helpful:
+          type: object
+          properties:
+            yes:
+              type: integer
+            no:
+              type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ReviewSummary:
+      type: object
+      properties:
+        averageRating:
+          type: number
+          format: float
+        totalReviews:
+          type: integer
+        ratingDistribution:
+          type: object
+          properties:
+            '1':
+              type: integer
+            '2':
+              type: integer
+            '3':
+              type: integer
+            '4':
+              type: integer
+            '5':
+              type: integer
+
+    PaginationMeta:
       type: object
       properties:
         page:
@@ -442,21 +988,71 @@ components:
           type: boolean
         hasPrev:
           type: boolean
-    Error:
+
+    SearchFacets:
       type: object
       properties:
-        error:
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              count:
+                type: integer
+        priceRanges:
+          type: array
+          items:
+            type: object
+            properties:
+              range:
+                type: string
+              count:
+                type: integer
+        authors:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              count:
+                type: integer
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
           type: string
         message:
           type: string
-  parameters:
-    BookId:
-      name: bookId
-      in: path
-      description: Book identifier
-      required: true
-      schema:
-        type: string
+        details:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+                  code:
+                    type: string
+
   responses:
     BadRequest:
       description: Bad request
@@ -464,31 +1060,38 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+
     Unauthorized:
-      description: Authentication required
+      description: Unauthorized
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-tags:
-  - name: Books
-    description: Book catalog operations
-  - name: Cart
-    description: Shopping cart management
-  - name: Orders
-    description: Order processing
-  - name: Reviews
-    description: Book reviews and ratings
-  - name: Authentication
-    description: User authentication
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.bookstore.example.com/oauth/authorize
+          tokenUrl: https://auth.bookstore.example.com/oauth/token
+          scopes:
+            read: Read access to protected resources
+            write: Write access to protected resources
+
+security:
+  - oauth2: []
